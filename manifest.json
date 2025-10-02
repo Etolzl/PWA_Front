@@ -1,0 +1,26 @@
+{
+    "name": "Galería Pinterest - PWA",
+    "short_name": "Galería PWA",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#667eea",
+    "theme_color": "#667eea",
+    "orientation": "portrait-primary",
+    "description": "Galería de imágenes estilo Pinterest - Descubre imágenes increíbles",
+    "icons": [
+        {
+            "src": "/icon.svg",
+            "sizes": "192x192",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/vite.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        }
+    ],
+    "categories": ["entertainment", "lifestyle", "social"],
+    "lang": "es",
+    "scope": "/"
+}

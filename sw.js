@@ -1,26 +1,29 @@
-const CACHE_VERSION = 'v1.1';
+const CACHE_VERSION = 'v1.2';
 const APP_SHELL_CACHE = `appShell_${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dynamic_${CACHE_VERSION}`;
+
+// Archivos esenciales para el funcionamiento offline
+const CACHE_FILES = [
+    '/',
+    '/manifest.json',
+    '/icon.svg',
+    '/vite.svg'
+];
 
 self.addEventListener('install', event => {
     console.log('SW: Instalando service worker...');
     event.waitUntil(
         caches.open(APP_SHELL_CACHE)
-        .then(cache=>{
-            console.log('SW: Cacheando App Shell...');
-            return cache.addAll([
-                "/",
-                "/src/index.css",
-                "/src/App.jsx",
-                "/src/App.css",
-                "/src/components/Dashboard.jsx",
-                "/src/components/Dashboard.css",
-                "/src/main.jsx"
-            ]);
+        .then(cache => {
+            console.log('SW: Cacheando archivos esenciales...');
+            return cache.addAll(CACHE_FILES);
         })
         .then(() => {
-            console.log('SW: App Shell cacheado exitosamente');
+            console.log('SW: Archivos esenciales cacheados exitosamente');
             return self.skipWaiting();
+        })
+        .catch(error => {
+            console.error('SW: Error al cachear archivos:', error);
         })
     );
 });

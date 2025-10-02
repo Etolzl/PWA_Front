@@ -598,13 +598,13 @@ function App() {
                     className={`nav-tab ${currentView === 'gallery' ? 'active' : ''}`}
                     onClick={() => setCurrentView('gallery')}
                   >
-                    🖼️ Galería
+                    Galería
                   </button>
                   <button 
                     className={`nav-tab ${currentView === 'dashboard' ? 'active' : ''}`}
                     onClick={() => setCurrentView('dashboard')}
                   >
-                    📁 Mi Colección
+                    Mi Colección
                   </button>
                 </div>
                 <div className="user-info">
