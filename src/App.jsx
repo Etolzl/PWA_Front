@@ -543,18 +543,20 @@ function App() {
             <h3>{image.title}</h3>
             <p>{image.description}</p>
             <div className="image-actions">
-              <button 
-                className="save-image-btn"
-                onClick={() => saveImageToProfile(image)}
-                disabled={savingImage || isImageSaved}
-                title={isImageSaved ? "Imagen ya guardada" : "Guardar en perfil"}
-                style={{
-                  backgroundColor: isImageSaved ? '#27ae60' : '#e74c3c',
-                  cursor: isImageSaved ? 'default' : 'pointer'
-                }}
-              >
-                {savingImage ? 'Guardando...' : (isImageSaved ? '✓ Guardada' : 'Guardar')}
-              </button>
+              {isLoggedIn && (
+                <button 
+                  className="save-image-btn"
+                  onClick={() => saveImageToProfile(image)}
+                  disabled={savingImage || isImageSaved}
+                  title={isImageSaved ? "Imagen ya guardada" : "Guardar en perfil"}
+                  style={{
+                    backgroundColor: isImageSaved ? '#27ae60' : '#e74c3c',
+                    cursor: isImageSaved ? 'default' : 'pointer'
+                  }}
+                >
+                  {savingImage ? 'Guardando...' : (isImageSaved ? '✓ Guardada' : 'Guardar')}
+                </button>
+              )}
               <button 
                 className="download-image-btn"
                 onClick={() => downloadImage(image.url, image.title)}

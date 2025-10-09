@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
 
 const Dashboard = ({ user, onLogout }) => {
@@ -8,6 +8,7 @@ const Dashboard = ({ user, onLogout }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [sortBy, setSortBy] = useState('recent'); // recent, title, category
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   const API_BASE = 'http://localhost:4001/api';
 
@@ -17,6 +18,20 @@ const Dashboard = ({ user, onLogout }) => {
       loadSavedImages();
     }
   }, [user]);
+
+  // Detectar cambios en el estado de conexión
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const loadSavedImages = async () => {
     setLoading(true);
@@ -51,26 +66,34 @@ const Dashboard = ({ user, onLogout }) => {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/images/remove`, {
+      // Intentar eliminar directamente primero
+      const response = await fetch(`${API_BASE}/images/${imageId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           'x-user-id': user.id
-        },
-        body: JSON.stringify({ imageId })
+        }
       });
 
       const data = await response.json();
       
       if (data.success) {
-        setSavedImages(prev => prev.filter(img => img.id !== imageId));
+        setSavedImages(prev => prev.filter(img => img._id !== imageId));
         alert('Imagen eliminada de tu colección');
+      } else if (data.queued) {
+        // La imagen se encoló para procesamiento offline
+        setSavedImages(prev => prev.filter(img => img._id !== imageId));
+        alert('Imagen eliminada de tu colección. Se procesará cuando haya conexión.');
       } else {
         alert(data.message || 'Error al eliminar la imagen');
       }
     } catch (error) {
       console.error('Error al eliminar imagen:', error);
-      alert('Error al eliminar la imagen. Inténtalo de nuevo.');
+      
+      // Si hay error de red, la petición se manejará automáticamente por el service worker
+      // y se encolará en IndexedDB. Simulamos el éxito en la UI para mejor UX
+      setSavedImages(prev => prev.filter(img => img._id !== imageId));
+      alert('Imagen eliminada de tu colección. Se procesará cuando haya conexión.');
     }
   };
 
@@ -115,7 +138,7 @@ const Dashboard = ({ user, onLogout }) => {
           return a.category.localeCompare(b.category);
         case 'recent':
         default:
-          return new Date(b.createdAt || b.fecha_guardado) - new Date(a.createdAt || a.fecha_guardado);
+          return new Date(b.savedAt || b.createdAt) - new Date(a.savedAt || a.createdAt);
       }
     });
 
@@ -159,7 +182,7 @@ const Dashboard = ({ user, onLogout }) => {
             </button>
             <button 
               className="remove-btn"
-              onClick={() => removeImage(image.id)}
+              onClick={() => removeImage(image._id)}
               title="Eliminar de mi colección"
             >
               🗑️ Eliminar
@@ -201,6 +224,11 @@ const Dashboard = ({ user, onLogout }) => {
         <div className="dashboard-title">
           <h1>Mi Colección Personal</h1>
           <p>Bienvenido, {user.name}. Aquí tienes todas tus imágenes guardadas.</p>
+          {isOffline && (
+            <div className="offline-indicator">
+              🔄 Modo offline - Mostrando imágenes cacheadas
+            </div>
+          )}
         </div>
         
         <div className="dashboard-stats">
