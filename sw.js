@@ -1,6 +1,21 @@
-const CACHE_VERSION = 'v1.3.6';
+const CACHE_VERSION = 'v1.5.0';
 const APP_SHELL_CACHE = `appShell_${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dynamic_${CACHE_VERSION}`;
+
+// Detectar si estamos en desarrollo local
+const isLocalDev = self.location.hostname === 'localhost' || 
+                   self.location.hostname === '127.0.0.1' || 
+                   self.location.hostname.startsWith('192.168.') ||
+                   self.location.hostname.startsWith('10.') ||
+                   self.location.hostname.startsWith('172.');
+
+// Detectar si estamos en Vercel
+const isVercel = self.location.hostname.includes('vercel.app') || 
+                 self.location.hostname.includes('vercel.com');
+
+console.log('SW: Entorno detectado:', isLocalDev ? 'DESARROLLO LOCAL' : (isVercel ? 'VERCEL' : 'PRODUCCIÓN'));
+console.log('SW: Hostname:', self.location.hostname);
+console.log('SW: Protocol:', self.location.protocol);
 
 // ----- IndexedDB (para colas offline) -----
 const IDB_NAME = 'pwa_offline_db';
@@ -313,20 +328,69 @@ const CACHE_FILES = [
     '/vite.svg'
 ];
 
+// En desarrollo local, no cachear archivos de Vite ya que cambian constantemente
+// En Vercel/producción, cachear archivos estáticos compilados
+if (!isLocalDev) {
+    // Para Vercel, los archivos están en /assets/ después del build
+    if (isVercel) {
+        CACHE_FILES.push(
+            '/assets/index.js',
+            '/assets/index.css',
+            '/assets/App.js',
+            '/assets/App.css'
+        );
+    } else {
+        // Para otros entornos de producción
+        CACHE_FILES.push(
+            '/src/main.jsx',
+            '/src/App.jsx',
+            '/src/App.css',
+            '/src/index.css',
+            '/src/components/Dashboard.jsx',
+            '/src/components/Dashboard.css',
+            '/src/components/PushNotificationManager.jsx',
+            '/src/components/PushNotificationManager.css',
+            '/src/services/eventService.js',
+            '/src/services/pushService.js'
+        );
+    }
+}
+
 self.addEventListener('install', event => {
     console.log('SW: Instalando service worker...');
+    console.log('SW: Entorno:', isLocalDev ? 'DESARROLLO LOCAL' : 'PRODUCCIÓN');
+    console.log('SW: Archivos a cachear:', CACHE_FILES);
+    
     event.waitUntil(
         caches.open(APP_SHELL_CACHE)
         .then(cache => {
+            console.log('SW: Cache abierto:', APP_SHELL_CACHE);
             console.log('SW: Cacheando archivos esenciales...');
-            return cache.addAll(CACHE_FILES);
+            
+            // Cachear archivos esenciales con manejo de errores individual
+            return Promise.allSettled(
+                CACHE_FILES.map(url => 
+                    cache.add(url).then(() => {
+                        console.log(`SW: ✅ Cacheado exitosamente: ${url}`);
+                        return url;
+                    }).catch(error => {
+                        console.warn(`SW: ❌ No se pudo cachear ${url}:`, error);
+                        return null;
+                    })
+                )
+            );
         })
-        .then(() => {
+        .then(results => {
+            const successful = results.filter(r => r.status === 'fulfilled' && r.value).length;
+            const failed = results.filter(r => r.status === 'rejected' || !r.value).length;
+            console.log(`SW: Cacheo completado - Exitosos: ${successful}, Fallidos: ${failed}`);
             console.log('SW: Archivos esenciales cacheados exitosamente');
             return self.skipWaiting();
         })
         .catch(error => {
             console.error('SW: Error al cachear archivos:', error);
+            // Continuar aunque haya errores
+            return self.skipWaiting();
         })
     );
 });
@@ -368,9 +432,27 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // Evitar cachear peticiones a APIs externas o recursos no necesarios
     const url = new URL(event.request.url);
-    if(url.origin !== location.origin && !url.pathname.includes('/api/')) {
+    
+    // Log para debugging
+    console.log('SW: Interceptando petición:', {
+        method: event.request.method,
+        url: url.href,
+        origin: url.origin,
+        pathname: url.pathname,
+        isLocalDev: isLocalDev
+    });
+
+    // Evitar cachear peticiones a APIs externas o recursos no necesarios
+    // En desarrollo local, ser más permisivo con el cacheo
+    if (!isLocalDev && url.origin !== location.origin && !url.pathname.includes('/api/')) {
+        console.log('SW: No interceptando - API externa en producción');
+        return;
+    }
+    
+    // En desarrollo local, evitar cachear recursos de Vite HMR
+    if (isLocalDev && (url.pathname.includes('/@vite/') || url.pathname.includes('/node_modules/'))) {
+        console.log('SW: No interceptando - Recurso Vite HMR');
         return;
     }
 
@@ -378,6 +460,42 @@ self.addEventListener('fetch', event => {
     if(url.pathname.includes('/api/push/')) {
         console.log('SW: No interceptando petición push:', url.href);
         return;
+    }
+
+    // FORZAR interceptación de peticiones API en desarrollo local
+    if (isLocalDev && url.pathname.includes('/api/')) {
+        console.log('SW: 🔧 Interceptando API en desarrollo local:', url.pathname);
+        
+        // Manejar peticiones de autenticación offline
+        if(url.pathname.includes('/api/auth/')) {
+            return handleAuthRequest(event);
+        }
+
+        // Manejar peticiones de imágenes offline
+        if(url.pathname.includes('/api/images/')) {
+            return handleImageRequest(event);
+        }
+        
+        // Para otras APIs, manejar genéricamente
+        return handleGenericAPIRequest(event);
+    }
+
+    // En Vercel/producción, interceptar TODAS las peticiones API para offline
+    if (!isLocalDev && url.pathname.includes('/api/')) {
+        console.log('SW: 🌐 Interceptando API en producción:', url.pathname);
+        
+        // Manejar peticiones de autenticación offline
+        if(url.pathname.includes('/api/auth/')) {
+            return handleAuthRequest(event);
+        }
+
+        // Manejar peticiones de imágenes offline
+        if(url.pathname.includes('/api/images/')) {
+            return handleImageRequest(event);
+        }
+        
+        // Para otras APIs, manejar genéricamente
+        return handleGenericAPIRequest(event);
     }
 
     // Manejar peticiones de autenticación offline
@@ -393,6 +511,38 @@ self.addEventListener('fetch', event => {
     event.respondWith(
         caches.match(event.request)
         .then(cacheResponse => {
+            // En desarrollo local, priorizar la red para archivos de Vite
+            if (isLocalDev && (url.pathname.includes('/src/') || url.pathname.includes('/@vite/'))) {
+                console.log('SW: 🔧 Desarrollo local - priorizando red para:', event.request.url);
+                return fetch(event.request)
+                .then(networkResponse => {
+                    console.log('SW: 🌐 Respuesta de red exitosa:', event.request.url, 'Status:', networkResponse.status);
+                    if (networkResponse.status === 200) {
+                        // Cachear solo si no es un archivo de Vite HMR
+                        if (!url.pathname.includes('/@vite/')) {
+                            const responseClone = networkResponse.clone();
+                            caches.open(DYNAMIC_CACHE)
+                            .then(cache => {
+                                cache.put(event.request, responseClone);
+                                console.log('SW: 💾 Agregado al cache dinámico (dev):', event.request.url);
+                            })
+                            .catch(err => console.warn('SW: Error al cachear:', err));
+                        }
+                    }
+                    return networkResponse;
+                })
+                .catch(error => {
+                    console.log('SW: ❌ Error de red en desarrollo local:', error);
+                    // Si falla la red, usar cache si está disponible
+                    if (cacheResponse) {
+                        console.log('SW: 🔄 Red falló, usando cache:', event.request.url);
+                        return cacheResponse;
+                    }
+                    console.log('SW: ❌ No hay cache disponible para:', event.request.url);
+                    throw error;
+                });
+            }
+
             // Si está en cache, devolverlo inmediatamente
             if(cacheResponse) {
                 console.log('SW: Sirviendo desde cache:', event.request.url);
@@ -446,20 +596,54 @@ self.addEventListener('fetch', event => {
                             <head>
                                 <title>Sin conexión - PWA Activa</title>
                                 <meta charset="utf-8">
+                                <meta name="viewport" content="width=device-width, initial-scale=1.0">
                                 <style>
                                     body { 
                                         font-family: Arial, sans-serif; 
                                         text-align: center; 
                                         padding: 50px; 
-                                        background: #f5f5f5;
+                                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                        color: white;
+                                        margin: 0;
+                                        min-height: 100vh;
+                                        display: flex;
+                                        flex-direction: column;
+                                        justify-content: center;
+                                        align-items: center;
                                     }
                                     .offline-badge {
                                         background: #4CAF50;
                                         color: white;
-                                        padding: 10px 20px;
-                                        border-radius: 20px;
+                                        padding: 15px 30px;
+                                        border-radius: 25px;
                                         display: inline-block;
+                                        margin-bottom: 30px;
+                                        font-size: 1.2rem;
+                                        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                                    }
+                                    h1 {
+                                        font-size: 2.5rem;
                                         margin-bottom: 20px;
+                                        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+                                    }
+                                    p {
+                                        font-size: 1.2rem;
+                                        margin: 10px 0;
+                                        opacity: 0.9;
+                                    }
+                                    .retry-btn {
+                                        background: #4CAF50;
+                                        color: white;
+                                        border: none;
+                                        padding: 12px 24px;
+                                        border-radius: 20px;
+                                        font-size: 1rem;
+                                        cursor: pointer;
+                                        margin-top: 20px;
+                                        transition: background 0.3s;
+                                    }
+                                    .retry-btn:hover {
+                                        background: #45a049;
                                     }
                                 </style>
                             </head>
@@ -468,11 +652,33 @@ self.addEventListener('fetch', event => {
                                 <h1>Sin conexión a internet</h1>
                                 <p>Tu aplicación PWA está funcionando en modo offline.</p>
                                 <p>Algunas páginas pueden no estar disponibles sin conexión.</p>
+                                <button class="retry-btn" onclick="window.location.reload()">Reintentar</button>
                             </body>
                             </html>
                         `, {
                             headers: { 'Content-Type': 'text/html' }
                         });
+                    });
+                }
+                
+                // Para recursos JavaScript y CSS, intentar servir desde cache
+                if(event.request.destination === 'script' || event.request.destination === 'style') {
+                    return caches.match(event.request.url)
+                    .then(cachedResource => {
+                        if(cachedResource) {
+                            console.log('✅ PWA OFFLINE: Recurso JS/CSS servido desde cache');
+                            return cachedResource;
+                        }
+                        // Si no está en cache, devolver un recurso vacío para evitar errores
+                        if(event.request.destination === 'script') {
+                            return new Response('// Recurso no disponible offline', {
+                                headers: { 'Content-Type': 'application/javascript' }
+                            });
+                        } else {
+                            return new Response('/* Recurso no disponible offline */', {
+                                headers: { 'Content-Type': 'text/css' }
+                            });
+                        }
                     });
                 }
                 
@@ -540,18 +746,23 @@ function handleImageRequest(event) {
 
             // Para guardar imagen offline, encolar tarea asíncrona en IndexedDB
             if(url.pathname.includes('/save') && event.request.method === 'POST') {
+                console.log('SW: 📝 Procesando guardado de imagen offline...');
                 try {
                     const contentType = requestForReplay.headers.get('Content-Type') || '';
                     let bodyData = null;
                     let bodyType = 'text';
                     
+                    console.log('SW: Content-Type:', contentType);
+                    
                     if (contentType.includes('application/json')) {
                         bodyData = await requestForReplay.json();
                         bodyType = 'json';
+                        console.log('SW: Body JSON parseado:', bodyData);
                     } else if (contentType.includes('application/x-www-form-urlencoded')) {
                         const text = await requestForReplay.text();
                         bodyData = text;
                         bodyType = 'urlencoded';
+                        console.log('SW: Body URL encoded:', text);
                     } else if (contentType.includes('multipart/form-data')) {
                         const formData = await requestForReplay.formData();
                         const entries = [];
@@ -560,24 +771,18 @@ function handleImageRequest(event) {
                         }
                         bodyData = entries;
                         bodyType = 'multipart';
+                        console.log('SW: Body FormData:', entries);
                     } else {
                         const text = await requestForReplay.text();
                         bodyData = text;
                         bodyType = 'text';
+                        console.log('SW: Body texto:', text);
                     }
 
-                    // Extraer userId del token si está disponible
-                    const authHeader = requestForReplay.headers.get('Authorization');
-                    let userId = 'unknown';
-                    if (authHeader && authHeader.startsWith('Bearer ')) {
-                        try {
-                            // En un caso real, aquí decodificarías el JWT para obtener el userId
-                            // Por simplicidad, usamos un valor por defecto
-                            userId = 'offline_user';
-                        } catch (e) {
-                            userId = 'unknown';
-                        }
-                    }
+                    // Extraer userId del header x-user-id
+                    const userIdHeader = requestForReplay.headers.get('x-user-id');
+                    let userId = userIdHeader || 'unknown';
+                    console.log('SW: UserId detectado:', userId);
 
                     const task = {
                         url: url.href,
@@ -592,15 +797,23 @@ function handleImageRequest(event) {
                         ttlMs: 1000 * 60 * 60 * 24 // 24h
                     };
 
+                    console.log('SW: Tarea creada:', task);
                     await idbAddPendingImage(task);
+                    console.log('SW: ✅ Tarea agregada a IndexedDB');
 
                     // Intentar registrar background sync
                     if (self.registration && 'sync' in self.registration) {
-                        try { await self.registration.sync.register('sync-pending-images'); } catch(e) {}
+                        try { 
+                            await self.registration.sync.register('sync-pending-images');
+                            console.log('SW: ✅ Background sync registrado');
+                        } catch(e) {
+                            console.warn('SW: ⚠️ Error registrando background sync:', e);
+                        }
                     }
 
                     // Asegurar sonda de conectividad activa
                     ensureConnectivityProbe();
+                    console.log('SW: ✅ Sonda de conectividad iniciada');
 
                     // Notificar a clientes
                     notifyClients({
@@ -608,6 +821,7 @@ function handleImageRequest(event) {
                         message: 'Tarea asíncrona de imagen creada. Se enviará cuando haya conexión.'
                     });
 
+                    console.log('SW: ✅ Respuesta de éxito enviada');
                     return new Response(JSON.stringify({
                         success: true,
                         queued: true,
@@ -617,7 +831,7 @@ function handleImageRequest(event) {
                         headers: { 'Content-Type': 'application/json' }
                     });
                 } catch (e) {
-                    console.error('SW: Error encolando imagen offline:', e);
+                    console.error('SW: ❌ Error encolando imagen offline:', e);
                     return new Response(JSON.stringify({
                         success: false,
                         message: 'No se pudo encolar la imagen offline.'
@@ -800,6 +1014,35 @@ function handleImageRequest(event) {
             return new Response(JSON.stringify({
                 success: false,
                 message: 'Servicio de imágenes no disponible offline'
+            }), {
+                status: 503,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        })
+    );
+}
+
+// Función para manejar peticiones API genéricas offline
+function handleGenericAPIRequest(event) {
+    const url = new URL(event.request.url);
+    
+    console.log('SW: 🔧 Manejando petición API genérica offline:', url.pathname);
+    
+    event.respondWith(
+        fetch(event.request)
+        .then(response => {
+            console.log('SW: 🌐 Respuesta API genérica exitosa:', response.status);
+            return response;
+        })
+        .catch(error => {
+            console.log('SW: ❌ Error en petición API genérica:', error);
+            console.log('SW: 🔄 Intentando fallback offline para API genérica');
+            
+            // Fallback genérico para APIs
+            return new Response(JSON.stringify({
+                success: false,
+                message: 'Servicio no disponible offline',
+                offline: true
             }), {
                 status: 503,
                 headers: { 'Content-Type': 'application/json' }

@@ -43,7 +43,29 @@ class PushService {
   // Obtener clave pública VAPID del servidor
   async obtenerClavePublica() {
     try {
-      const response = await fetch('https://pwa-back-8s5p.onrender.com/api/push/vapid-keys');
+      // Verificar conectividad antes de hacer la petición
+      if (!navigator.onLine) {
+        console.warn('Sin conexión, usando clave VAPID del backend');
+        this.publicKey = 'BNHuA8ZVmrUyFMzsJO7EKPd80kErGxAh_NpZJ6xBD-DuPLQ5Ya9Jp5G9jIgyl5eETPMk5WWNatb6MXgFIyQdbbI';
+        return this.publicKey;
+      }
+
+      // En desarrollo local, usar directamente la clave del backend
+      const isLocalDev = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' || 
+                        window.location.hostname.startsWith('192.168.') ||
+                        window.location.hostname.startsWith('10.') ||
+                        window.location.hostname.startsWith('172.');
+      
+      if (isLocalDev) {
+        console.log('🔧 Modo desarrollo local detectado, usando clave VAPID del backend');
+        this.publicKey = 'BNHuA8ZVmrUyFMzsJO7EKPd80kErGxAh_NpZJ6xBD-DuPLQ5Ya9Jp5G9jIgyl5eETPMk5WWNatb6MXgFIyQdbbI';
+        return this.publicKey;
+      }
+
+      const response = await fetch('https://pwa-back-8s5p.onrender.com/api/push/vapid-keys', {
+        timeout: 5000 // Timeout de 5 segundos
+      });
       
       // Verificar si la respuesta es HTML (error 404 o similar)
       const contentType = response.headers.get('content-type');

@@ -5,7 +5,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
-    port: 5173
+    port: 5173,
+    // Configuración para mejorar compatibilidad con service workers
+    headers: {
+      'Service-Worker-Allowed': '/'
+    }
   },
   build: {
     outDir: 'dist',
@@ -25,5 +29,9 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['react', 'react-dom']
+  },
+  // Configuración para PWA
+  define: {
+    __DEV__: JSON.stringify(process.env.NODE_ENV === 'development')
   }
 })

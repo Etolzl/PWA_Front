@@ -18,9 +18,25 @@
             "src": "/vite.svg",
             "sizes": "any",
             "type": "image/svg+xml"
+        },
+        {
+            "src": "/icon.svg",
+            "sizes": "512x512",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
         }
     ],
     "categories": ["entertainment", "lifestyle", "social"],
     "lang": "es",
-    "scope": "/"
+    "scope": "/",
+    "prefer_related_applications": false,
+    "related_applications": [],
+    "screenshots": [
+        {
+            "src": "/icon.svg",
+            "sizes": "1280x720",
+            "type": "image/svg+xml",
+            "form_factor": "wide"
+        }
+    ]
 }
