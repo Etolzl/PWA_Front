@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v1.2';
+const CACHE_VERSION = 'v1.3.6';
 const APP_SHELL_CACHE = `appShell_${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dynamic_${CACHE_VERSION}`;
 
@@ -374,6 +374,12 @@ self.addEventListener('fetch', event => {
         return;
     }
 
+    // No interceptar peticiones push al backend
+    if(url.pathname.includes('/api/push/')) {
+        console.log('SW: No interceptando petición push:', url.href);
+        return;
+    }
+
     // Manejar peticiones de autenticación offline
     if(url.pathname.includes('/api/auth/')) {
         return handleAuthRequest(event);
@@ -499,8 +505,8 @@ function handleImageRequest(event) {
     event.respondWith(
         fetch(event.request)
         .then(async response => {
-            // Si la petición es exitosa, guardar en cache para uso offline
-            if(response.ok) {
+            // Solo cachear peticiones GET exitosas
+            if(response.ok && event.request.method === 'GET') {
                 const responseClone = response.clone();
                 caches.open(DYNAMIC_CACHE)
                 .then(cache => {
@@ -509,11 +515,13 @@ function handleImageRequest(event) {
                 });
 
                 // Si es una petición GET para obtener imágenes guardadas, cachear en IndexedDB
-                if(url.pathname.includes('/saved') && event.request.method === 'GET') {
+                if(url.pathname.includes('/saved')) {
                     try {
                         const userId = event.request.headers.get('x-user-id');
                         if (userId) {
-                            const responseData = await response.json();
+                            // Crear una nueva respuesta clonada para IndexedDB
+                            const responseForIndexedDB = response.clone();
+                            const responseData = await responseForIndexedDB.json();
                             if (responseData.success && responseData.data && responseData.data.imagenes) {
                                 await idbSaveUserImages(userId, responseData.data.imagenes);
                                 console.log('SW: Imágenes guardadas cacheadas en IndexedDB para usuario:', userId);
@@ -638,8 +646,21 @@ function handleImageRequest(event) {
                     
                     const contentType = requestForReplay.headers.get('Content-Type') || '';
                     if (contentType.includes('application/json')) {
-                        bodyData = await requestForReplay.json();
-                        bodyType = 'json';
+                        try {
+                            // Verificar si hay contenido antes de parsear
+                            const text = await requestForReplay.text();
+                            if (text && text.trim()) {
+                                bodyData = JSON.parse(text);
+                                bodyType = 'json';
+                            } else {
+                                bodyData = null;
+                                bodyType = 'none';
+                            }
+                        } catch (parseError) {
+                            console.warn('SW: Error parseando JSON del cuerpo DELETE:', parseError);
+                            bodyData = null;
+                            bodyType = 'none';
+                        }
                     }
 
                     // Actualizar cache local inmediatamente
@@ -802,8 +823,8 @@ function handleAuthRequest(event) {
     event.respondWith(
         fetch(event.request)
         .then(response => {
-            // Si la petición es exitosa, guardar en cache para uso offline
-            if(response.ok) {
+            // Solo cachear peticiones GET exitosas
+            if(response.ok && event.request.method === 'GET') {
                 const responseClone = response.clone();
                 caches.open(DYNAMIC_CACHE)
                 .then(cache => {
@@ -940,7 +961,133 @@ self.addEventListener('offline', () => {
     console.log('📱 PWA: Sin conexión a internet - Modo offline activado');
 });
 
-/*self.addEventListener('push', event => {});*/
+// Manejar notificaciones push
+self.addEventListener('push', event => {
+    console.log('SW: Notificación push recibida');
+    
+    let data = {};
+    if (event.data) {
+        try {
+            // Intentar parsear como JSON primero
+            data = event.data.json();
+        } catch (e) {
+            console.log('SW: Datos no son JSON, intentando como texto');
+            try {
+                // Si no es JSON, intentar como texto
+                const textData = event.data.text();
+                console.log('SW: Datos de push como texto:', textData);
+                
+                // Si es un mensaje de prueba simple, crear datos por defecto
+                if (textData.includes('Test push message')) {
+                    data = {
+                        title: 'Mensaje de Prueba',
+                        body: textData,
+                        url: '/',
+                        icon: '/icon.svg'
+                    };
+                } else {
+                    // Intentar parsear como JSON manualmente
+                    data = JSON.parse(textData);
+                }
+            } catch (textError) {
+                console.error('SW: Error parseando datos de push como texto:', textError);
+                data = {
+                    title: 'Nueva notificación',
+                    body: event.data.text() || 'Tienes una nueva notificación',
+                    url: '/',
+                    icon: '/icon.svg'
+                };
+            }
+        }
+    } else {
+        data = {
+            title: 'Nueva notificación',
+            body: 'Tienes una nueva notificación',
+            url: '/',
+            icon: '/icon.svg'
+        };
+    }
+
+    const options = {
+        body: data.body || 'Tienes una nueva notificación',
+        icon: data.icon || '/icon.svg',
+        badge: data.badge || '/icon.svg',
+        data: {
+            url: data.url || '/',
+            timestamp: data.timestamp || Date.now()
+        },
+        actions: [
+            {
+                action: 'open',
+                title: 'Abrir',
+                icon: '/icon.svg'
+            },
+            {
+                action: 'close',
+                title: 'Cerrar',
+                icon: '/icon.svg'
+            }
+        ],
+        requireInteraction: false,
+        silent: false,
+        tag: 'pwa-notification',
+        renotify: true
+    };
+
+    event.waitUntil(
+        self.registration.showNotification(data.title || 'PWA Notificación', options)
+        .catch(error => {
+            console.error('SW: Error mostrando notificación:', error);
+            if (error.name === 'NotAllowedError') {
+                console.warn('SW: Permisos de notificación no concedidos. El usuario debe habilitar las notificaciones.');
+                // Notificar a los clientes sobre el problema de permisos
+                notifyClients({
+                    type: 'NOTIFICATION_PERMISSION_DENIED',
+                    message: 'Permisos de notificación no concedidos. Por favor, habilita las notificaciones en tu navegador.'
+                });
+            }
+        })
+    );
+});
+
+// Manejar clics en notificaciones
+self.addEventListener('notificationclick', event => {
+    console.log('SW: Click en notificación:', event.action);
+    
+    event.notification.close();
+
+    if (event.action === 'close') {
+        return;
+    }
+
+    // Abrir o enfocar la ventana de la aplicación
+    const urlToOpen = event.notification.data?.url || '/';
+    
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then(clientList => {
+            // Buscar si ya hay una ventana abierta
+            for (const client of clientList) {
+                if (client.url.includes(self.location.origin) && 'focus' in client) {
+                    client.focus();
+                    client.navigate(urlToOpen);
+                    return;
+                }
+            }
+            
+            // Si no hay ventana abierta, abrir una nueva
+            if (clients.openWindow) {
+                return clients.openWindow(urlToOpen);
+            }
+        })
+    );
+});
+
+// Manejar cierre de notificaciones
+self.addEventListener('notificationclose', event => {
+    console.log('SW: Notificación cerrada');
+    // Aquí puedes agregar lógica adicional si es necesario
+});
 
 // Procesa la cola de imágenes pendientes almacenados en IndexedDB
 async function processPendingImages() {
@@ -981,9 +1128,6 @@ async function processPendingImages() {
                     }
                 } else if (task.bodyType === 'none') {
                     body = null;
-                } else if (task.bodyType === 'json') {
-                    body = JSON.stringify(task.body);
-                    if (headers.set) headers.set('Content-Type', 'application/json');
                 } else if (typeof task.body === 'string') {
                     body = task.body;
                 } else {

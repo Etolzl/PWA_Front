@@ -1,0 +1,221 @@
+.push-notification-manager {
+  margin: 20px 0;
+}
+
+.push-notification-card {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.push-notification-card.unsupported {
+  background: #f8f9fa;
+  border-color: #dee2e6;
+}
+
+.push-notification-card h3 {
+  margin: 0 0 16px 0;
+  color: #333;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.push-notification-card p {
+  margin: 8px 0;
+  color: #666;
+  line-height: 1.5;
+}
+
+.message {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-weight: 500;
+}
+
+.message.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.message.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.subscription-status {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.subscription-status p {
+  margin: 4px 0;
+  font-weight: 500;
+}
+
+.subscription-status .subscribed {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.subscription-status .not-subscribed {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.subscription-status .permission-granted {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.subscription-status .permission-denied {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.subscription-status .permission-default {
+  color: #ffc107;
+  font-weight: 600;
+}
+
+.subscription-status .permission-unsupported {
+  color: #6c757d;
+  font-weight: 600;
+}
+
+.subscription-date {
+  font-size: 0.9rem;
+  color: #6c757d;
+  font-weight: normal !important;
+}
+
+.subscription-actions {
+  margin-bottom: 20px;
+}
+
+.subscribe-btn, .unsubscribe-btn {
+  width: 100%;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.subscribe-btn {
+  background: #007bff;
+  color: white;
+}
+
+.subscribe-btn:hover:not(:disabled) {
+  background: #0056b3;
+  transform: translateY(-1px);
+}
+
+.subscribe-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.unsubscribe-btn {
+  background: #dc3545;
+  color: white;
+}
+
+.unsubscribe-btn:hover:not(:disabled) {
+  background: #c82333;
+  transform: translateY(-1px);
+}
+
+.unsubscribe-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.auth-required {
+  background: #fff3cd;
+  color: #856404;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #ffeaa7;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+.push-info {
+  background: #e3f2fd;
+  padding: 16px;
+  border-radius: 8px;
+  border-left: 4px solid #2196f3;
+}
+
+.push-info h4 {
+  margin: 0 0 12px 0;
+  color: #1976d2;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.push-info ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #424242;
+}
+
+.push-info li {
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.push-info li:last-child {
+  margin-bottom: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .push-notification-card {
+    margin: 0 16px;
+    padding: 20px;
+  }
+  
+  .push-notification-card h3 {
+    font-size: 1.1rem;
+  }
+  
+  .subscribe-btn, .unsubscribe-btn {
+    padding: 14px 20px;
+    font-size: 0.95rem;
+  }
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.push-notification-card {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.message {
+  animation: fadeIn 0.2s ease-out;
+}

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Limpiar Cache y Service Worker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Limpiar Cache y Service Worker</h1>
+        
+        <div id="status" class="status info">
+            Listo para limpiar cache...
+        </div>
+
+        <div>
+            <button onclick="clearServiceWorker()">Limpiar Service Worker</button>
+            <button onclick="clearCache()">Limpiar Cache</button>
+            <button onclick="clearAll()">Limpiar Todo</button>
+            <button onclick="reloadPage()">Recargar Página</button>
+        </div>
+
+        <div class="log" id="log">
+            <div>Herramientas de limpieza de cache cargadas...</div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : type === 'warning' ? '#ffc107' : '#007bff';
+            logDiv.innerHTML += `<div style="color: ${color}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        async function clearServiceWorker() {
+            log('Limpiando Service Worker...');
+            
+            try {
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    log(`Encontrados ${registrations.length} service workers`);
+                    
+                    for (const registration of registrations) {
+                        await registration.unregister();
+                        log(`Service Worker desregistrado: ${registration.scope}`, 'success');
+                    }
+                    
+                    updateStatus('✅ Service Workers eliminados', 'success');
+                } else {
+                    log('Service Workers no soportados en este navegador', 'warning');
+                }
+            } catch (error) {
+                log(`Error limpiando Service Workers: ${error.message}`, 'error');
+                updateStatus('❌ Error limpiando Service Workers', 'error');
+            }
+        }
+
+        async function clearCache() {
+            log('Limpiando Cache...');
+            
+            try {
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    log(`Encontrados ${cacheNames.length} caches`);
+                    
+                    for (const cacheName of cacheNames) {
+                        await caches.delete(cacheName);
+                        log(`Cache eliminado: ${cacheName}`, 'success');
+                    }
+                    
+                    updateStatus('✅ Caches eliminados', 'success');
+                } else {
+                    log('Cache API no soportada en este navegador', 'warning');
+                }
+            } catch (error) {
+                log(`Error limpiando caches: ${error.message}`, 'error');
+                updateStatus('❌ Error limpiando caches', 'error');
+            }
+        }
+
+        async function clearAll() {
+            log('Limpiando todo...');
+            updateStatus('Limpiando todo...', 'info');
+            
+            await clearServiceWorker();
+            await clearCache();
+            
+            // Limpiar localStorage
+            try {
+                localStorage.clear();
+                log('LocalStorage limpiado', 'success');
+            } catch (error) {
+                log(`Error limpiando localStorage: ${error.message}`, 'error');
+            }
+            
+            // Limpiar sessionStorage
+            try {
+                sessionStorage.clear();
+                log('SessionStorage limpiado', 'success');
+            } catch (error) {
+                log(`Error limpiando sessionStorage: ${error.message}`, 'error');
+            }
+            
+            updateStatus('✅ Todo limpiado correctamente', 'success');
+        }
+
+        function reloadPage() {
+            log('Recargando página...');
+            window.location.reload(true);
+        }
+
+        // Mostrar información del Service Worker actual
+        window.addEventListener('load', async () => {
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                log(`Service Workers activos: ${registrations.length}`);
+                
+                for (const registration of registrations) {
+                    log(`- ${registration.scope} (Estado: ${registration.active ? 'Activo' : 'Inactivo'})`);
+                }
+            }
+            
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                log(`Caches disponibles: ${cacheNames.length}`);
+                
+                for (const cacheName of cacheNames) {
+                    log(`- ${cacheName}`);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

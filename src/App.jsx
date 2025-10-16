@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, memo } from 'react'
 import './App.css'
 import Dashboard from './components/Dashboard'
+import pushService from './services/pushService'
+import eventService from './services/eventService'
 
 // Datos mock de imágenes para la galería
 const mockImages = [
@@ -229,7 +231,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
-  const API_BASE = 'http://localhost:4001/api/auth';
+  const API_BASE = 'https://pwa-back-8s5p.onrender.com/api/auth';
   
   // Estados para autenticación
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -274,6 +276,7 @@ function App() {
           if (daysDiff < 7) { // Sesión válida por 7 días
             setUser(userData);
             setIsLoggedIn(true);
+            setCurrentView('dashboard'); // Ir al dashboard al restaurar sesión
             console.log('🔄 PWA: Sesión restaurada desde cache offline');
           } else {
             // Sesión expirada, limpiar
@@ -313,6 +316,83 @@ function App() {
   }, [isLoggedIn, user]);
 
   // Funciones de autenticación
+
+  // Función para solicitar permisos de notificaciones automáticamente
+  const solicitarPermisosNotificaciones = async (userId) => {
+    try {
+      // Verificar soporte básico
+      if (!('Notification' in window)) {
+        console.log('Este navegador no soporta notificaciones');
+        return;
+      }
+
+      if (!('serviceWorker' in navigator)) {
+        console.log('Este navegador no soporta service workers');
+        return;
+      }
+
+      // Inicializar el servicio de push
+      const isInitialized = await pushService.init();
+      
+      if (!isInitialized) {
+        console.log('Push notifications no se pudieron inicializar');
+        return;
+      }
+
+      // Verificar si ya tiene permisos
+      const currentPermission = pushService.obtenerEstadoPermisos();
+      
+      if (currentPermission === 'granted') {
+        console.log('Permisos de notificación ya concedidos');
+        // Verificar si ya hay una suscripción para este usuario
+        const hasSubscription = pushService.tieneSuscripcionGuardada(userId);
+        if (!hasSubscription) {
+          // Intentar suscribirse automáticamente si ya tiene permisos pero no suscripción
+          try {
+            await pushService.suscribirse(userId);
+            console.log('Suscripción automática exitosa');
+            // Emitir evento para actualizar el componente
+            eventService.emit('subscriptionUpdated', { userId, isSubscribed: true });
+          } catch (error) {
+            console.log('Error en suscripción automática:', error.message);
+            eventService.emit('subscriptionUpdated', { userId, isSubscribed: false, error: error.message });
+          }
+        } else {
+          console.log('Usuario ya tiene suscripción activa');
+          // Emitir evento para actualizar el componente
+          eventService.emit('subscriptionUpdated', { userId, isSubscribed: true });
+        }
+        return;
+      }
+
+      if (currentPermission === 'denied') {
+        console.log('Permisos de notificación previamente denegados');
+        return;
+      }
+
+      // Solicitar permisos al usuario
+      console.log('Solicitando permisos de notificación...');
+      const permission = await pushService.verificarPermisos();
+      
+      if (permission === 'granted') {
+        console.log('Permisos concedidos, suscribiendo automáticamente...');
+        try {
+          await pushService.suscribirse(userId);
+          console.log('Suscripción automática exitosa después de conceder permisos');
+          // Emitir evento para actualizar el componente
+          eventService.emit('subscriptionUpdated', { userId, isSubscribed: true });
+        } catch (error) {
+          console.log('Error en suscripción automática:', error.message);
+          eventService.emit('subscriptionUpdated', { userId, isSubscribed: false, error: error.message });
+        }
+      } else {
+        console.log('Permisos de notificación denegados por el usuario');
+        eventService.emit('subscriptionUpdated', { userId, isSubscribed: false, error: 'Permisos denegados' });
+      }
+    } catch (error) {
+      console.error('Error solicitando permisos de notificación:', error);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -358,8 +438,14 @@ function App() {
         
         setUser(userData);
         setIsLoggedIn(true);
+        setCurrentView('dashboard'); // Redirigir al dashboard después del login
         setShowAuthModal(false);
         setFormData({ name: '', email: '', password: '', confirmPassword: '' });
+        
+        // Solicitar permisos de notificaciones automáticamente después del login exitoso
+        setTimeout(() => {
+          solicitarPermisosNotificaciones(userData.id);
+        }, 1000); // Pequeño delay para que el usuario vea que el login fue exitoso
       } else {
         // Registro
         if (formData.password !== formData.confirmPassword) {
@@ -398,6 +484,9 @@ function App() {
     // Limpiar sesión del localStorage
     localStorage.removeItem('pwa_user_session');
     localStorage.removeItem('pwa_is_logged_in');
+    
+    // Nota: Las suscripciones push ahora se gestionan desde la BD
+    // No es necesario limpiar localStorage ya que no se usa para suscripciones
     
     setIsLoggedIn(false);
     setUser(null);
@@ -481,17 +570,41 @@ function App() {
     try {
       const response = await fetch(`${API_BASE.replace('/auth', '')}/images/saved`, {
         headers: {
-          'x-user-id': user.id
+          'x-user-id': user.id,
+          'Content-Type': 'application/json'
         }
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
       const data = await response.json();
       if (data.success) {
         const savedUrls = data.data.imagenes.map(img => img.url);
         setSavedImages(new Set(savedUrls));
+      } else {
+        console.error('Error del servidor:', data.message);
       }
     } catch (error) {
       console.error('Error al cargar imágenes guardadas:', error);
+      // Intentar cargar desde cache offline si está disponible
+      try {
+        if ('serviceWorker' in navigator && 'caches' in window) {
+          const cache = await caches.open('pwa-dynamic-cache');
+          const cachedResponse = await cache.match(`${API_BASE.replace('/auth', '')}/images/saved`);
+          if (cachedResponse) {
+            const cachedData = await cachedResponse.json();
+            if (cachedData.success) {
+              const savedUrls = cachedData.data.imagenes.map(img => img.url);
+              setSavedImages(new Set(savedUrls));
+              console.log('Imágenes cargadas desde cache offline');
+            }
+          }
+        }
+      } catch (cacheError) {
+        console.error('Error al cargar desde cache:', cacheError);
+      }
     }
   };
 
@@ -600,7 +713,7 @@ function App() {
                     className={`nav-tab ${currentView === 'gallery' ? 'active' : ''}`}
                     onClick={() => setCurrentView('gallery')}
                   >
-                    Galería
+                    Explorar Galería
                   </button>
                   <button 
                     className={`nav-tab ${currentView === 'dashboard' ? 'active' : ''}`}
@@ -657,7 +770,7 @@ function App() {
                     className={`nav-tab ${currentView === 'gallery' ? 'active' : ''}`}
                     onClick={() => setCurrentView('gallery')}
                   >
-                    Galería
+                    Explorar Galería
                   </button>
                   <button 
                     className={`nav-tab ${currentView === 'dashboard' ? 'active' : ''}`}
@@ -730,6 +843,23 @@ function App() {
           </p>
         </div>
       </header>
+
+      
+      {/* Mensaje de bienvenida para usuarios autenticados en la galería */}
+      {isLoggedIn && currentView === 'gallery' && (
+        <div className="welcome-message">
+          <div className="welcome-card">
+            <h3>¡Bienvenido de vuelta, {user.name}! 👋</h3>
+            <p>Explora nuevas imágenes y guárdalas en tu colección personal.</p>
+            <button 
+              className="go-to-dashboard-btn"
+              onClick={() => setCurrentView('dashboard')}
+            >
+              Ver Mi Colección
+            </button>
+          </div>
+        </div>
+      )}
       
       <main className="gallery-container">
         {filteredImages.length > 0 ? (

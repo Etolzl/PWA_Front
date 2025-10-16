@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
+import PushNotificationManager from './PushNotificationManager';
 
 const Dashboard = ({ user, onLogout }) => {
   const [savedImages, setSavedImages] = useState([]);
@@ -10,7 +11,7 @@ const Dashboard = ({ user, onLogout }) => {
   const [sortBy, setSortBy] = useState('recent'); // recent, title, category
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
-  const API_BASE = 'http://localhost:4001/api';
+  const API_BASE = 'https://pwa-back-8s5p.onrender.com/api';
 
   // Cargar imágenes guardadas del usuario
   useEffect(() => {
@@ -298,12 +299,18 @@ const Dashboard = ({ user, onLogout }) => {
         </p>
       </div>
 
+      {/* Gestor de notificaciones push */}
+      <PushNotificationManager 
+        userId={user?.id} 
+        isAuthenticated={!!user} 
+      />
+
       {/* Galería de imágenes */}
       <main className="dashboard-gallery">
         {filteredImages.length > 0 ? (
           <div className="gallery-grid">
             {filteredImages.map((image) => (
-              <ImageCard key={image.id} image={image} />
+              <ImageCard key={image._id || image.id} image={image} />
             ))}
           </div>
         ) : (
