@@ -6,32 +6,18 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    // Configuración para mejorar compatibilidad con service workers
-    headers: {
-      'Service-Worker-Allowed': '/'
-    }
+    headers: { 'Service-Worker-Allowed': '/' }
   },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: false,
     rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom']
-        }
-      }
+      output: { manualChunks: { vendor: ['react', 'react-dom'] } }
     }
   },
-  base: './',
-  resolve: {
-    dedupe: ['react', 'react-dom']
-  },
-  optimizeDeps: {
-    include: ['react', 'react-dom']
-  },
-  // Configuración para PWA
-  define: {
-    __DEV__: JSON.stringify(process.env.NODE_ENV === 'development')
-  }
+  base: '/', // ✅ rutas absolutas
+  resolve: { dedupe: ['react', 'react-dom'] },
+  optimizeDeps: { include: ['react', 'react-dom'] },
+  define: { __DEV__: JSON.stringify(process.env.NODE_ENV === 'development') }
 })

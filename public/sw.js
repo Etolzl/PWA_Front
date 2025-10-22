@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v1.5.0';
+const CACHE_VERSION = 'v1.5.2';
 const APP_SHELL_CACHE = `appShell_${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dynamic_${CACHE_VERSION}`;
 

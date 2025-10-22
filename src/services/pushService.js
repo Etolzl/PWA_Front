@@ -63,7 +63,7 @@ class PushService {
         return this.publicKey;
       }
 
-      const response = await fetch('https://pwa-back-8s5p.onrender.com/api/push/vapid-keys', {
+      const response = await fetch('/api/push/vapid-keys', {
         timeout: 5000 // Timeout de 5 segundos
       });
       
@@ -232,7 +232,7 @@ class PushService {
   // Enviar suscripción al servidor
   async enviarSuscripcionAlServidor(subscription, userId) {
     try {
-      const response = await fetch('https://pwa-back-8s5p.onrender.com/api/push/suscribir', {
+      const response = await fetch('/api/push/suscribir', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -266,7 +266,7 @@ class PushService {
   // Notificar desuscripción al servidor
   async notificarDesuscripcionAlServidor(subscription, userId) {
     try {
-      const response = await fetch('https://pwa-back-8s5p.onrender.com/api/push/desuscribir', {
+      const response = await fetch('/api/push/desuscribir', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -299,7 +299,7 @@ class PushService {
   // Verificar si una suscripción existe en la base de datos para un usuario
   async verificarSuscripcionEnBD(endpoint, userId) {
     try {
-      const response = await fetch(`https://pwa-back-8s5p.onrender.com/api/push/verificar-suscripcion`, {
+      const response = await fetch(`/api/push/verificar-suscripcion`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
