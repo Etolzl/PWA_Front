@@ -63,7 +63,10 @@ class PushService {
         return this.publicKey;
       }
 
-      const response = await fetch('/api/push/vapid-keys', {
+      // Determinar la URL base del backend
+      const backendUrl = this.getBackendUrl();
+      
+      const response = await fetch(`${backendUrl}/api/push/vapid-keys`, {
         timeout: 5000 // Timeout de 5 segundos
       });
       
@@ -232,7 +235,10 @@ class PushService {
   // Enviar suscripción al servidor
   async enviarSuscripcionAlServidor(subscription, userId) {
     try {
-      const response = await fetch('/api/push/suscribir', {
+      // Determinar la URL base del backend
+      const backendUrl = this.getBackendUrl();
+      
+      const response = await fetch(`${backendUrl}/api/push/suscribir`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -266,7 +272,10 @@ class PushService {
   // Notificar desuscripción al servidor
   async notificarDesuscripcionAlServidor(subscription, userId) {
     try {
-      const response = await fetch('/api/push/desuscribir', {
+      // Determinar la URL base del backend
+      const backendUrl = this.getBackendUrl();
+      
+      const response = await fetch(`${backendUrl}/api/push/desuscribir`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -299,7 +308,10 @@ class PushService {
   // Verificar si una suscripción existe en la base de datos para un usuario
   async verificarSuscripcionEnBD(endpoint, userId) {
     try {
-      const response = await fetch(`/api/push/verificar-suscripcion`, {
+      // Determinar la URL base del backend
+      const backendUrl = this.getBackendUrl();
+      
+      const response = await fetch(`${backendUrl}/api/push/verificar-suscripcion`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -319,6 +331,23 @@ class PushService {
       console.error('Error verificando suscripción en BD:', error);
       return false;
     }
+  }
+
+  // Obtener la URL base del backend
+  getBackendUrl() {
+    // En desarrollo local, usar localhost:4001
+    const isLocalDev = window.location.hostname === 'localhost' || 
+                      window.location.hostname === '127.0.0.1' || 
+                      window.location.hostname.startsWith('192.168.') ||
+                      window.location.hostname.startsWith('10.') ||
+                      window.location.hostname.startsWith('172.');
+    
+    if (isLocalDev) {
+      return 'https://pwa-back-8s5p.onrender.com';
+    }
+    
+    // En producción, usar la URL base actual
+    return window.location.origin;
   }
 
   // Convertir clave base64 a Uint8Array
@@ -421,6 +450,91 @@ class PushService {
       return !!status?.isSubscribed;
     } catch (_) {
       return false;
+    }
+  }
+
+  // Enviar notificación push a un usuario específico (para administradores)
+  async enviarNotificacionAUsuario(userId, titulo, mensaje, url = '/', icono = '/icon.svg', adminUserId = null) {
+    try {
+      // Determinar la URL base del backend
+      const backendUrl = this.getBackendUrl();
+      
+      // Si no se proporciona adminUserId, usar el mismo userId o un ID por defecto
+      const senderUserId = adminUserId || userId;
+      
+      const response = await fetch(`${backendUrl}/api/push/enviar-usuario`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': senderUserId // ID del usuario que envía (admin)
+        },
+        body: JSON.stringify({
+          userId: userId, // ID del usuario destinatario
+          titulo: titulo,
+          mensaje: mensaje,
+          url: url,
+          icono: icono
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Error enviando notificación');
+      }
+
+      console.log('Notificación enviada exitosamente:', data);
+      return data;
+
+    } catch (error) {
+      console.error('Error enviando notificación push:', error);
+      throw error;
+    }
+  }
+
+  // Enviar notificación push global (para administradores)
+  async enviarNotificacionGlobal(titulo, mensaje, url = '/', icono = '/icon.svg', adminUserId = null) {
+    try {
+      // Determinar la URL base del backend
+      const backendUrl = this.getBackendUrl();
+      
+      // Si no se proporciona adminUserId, usar un ID por defecto o saltar autenticación
+      const userId = adminUserId || 'admin-global';
+      
+      const response = await fetch(`${backendUrl}/api/push/enviar-global`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userId
+        },
+        body: JSON.stringify({
+          titulo: titulo,
+          mensaje: mensaje,
+          url: url,
+          icono: icono
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Error enviando notificación global');
+      }
+
+      console.log('Notificación global enviada exitosamente:', data);
+      return data;
+
+    } catch (error) {
+      console.error('Error enviando notificación global:', error);
+      throw error;
     }
   }
 }

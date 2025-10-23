@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, memo } from 'react'
 import './App.css'
 import Dashboard from './components/Dashboard'
+import AdminDashboard from './components/AdminDashboard'
 import pushService from './services/pushService'
 import eventService from './services/eventService'
 
@@ -429,6 +430,7 @@ function App() {
           id: data.data.id,
           name: data.data.nombre,
           email: data.data.correo,
+          rol: data.data.rol,
           loginTime: new Date().toISOString()
         };
         
@@ -695,7 +697,7 @@ function App() {
     );
   }
 
-  // Si el usuario está logueado y quiere ver el dashboard, mostrar el Dashboard
+  // Si el usuario está logueado y quiere ver el dashboard, mostrar el Dashboard correspondiente
   if (isLoggedIn && currentView === 'dashboard') {
     return (
       <div className="app">
@@ -719,11 +721,14 @@ function App() {
                     className={`nav-tab ${currentView === 'dashboard' ? 'active' : ''}`}
                     onClick={() => setCurrentView('dashboard')}
                   >
-                    Mi Colección
+                    {user.rol === 'admin' ? 'Panel Admin' : 'Mi Colección'}
                   </button>
                 </div>
                 <div className="user-info">
-                  <span className="user-greeting">¡Hola, {user.name}!</span>
+                  <span className="user-greeting">
+                    ¡Hola, {user.name}! 
+                    {user.rol === 'admin' && <span className="admin-badge">👑 Admin</span>}
+                  </span>
                   <button className="logout-btn" onClick={handleLogout}>
                     Cerrar Sesión
                   </button>
@@ -733,7 +738,12 @@ function App() {
           </div>
         </header>
         
-        <Dashboard user={user} onLogout={handleLogout} />
+        {/* Mostrar dashboard según el rol del usuario */}
+        {user.rol === 'admin' ? (
+          <AdminDashboard user={user} onLogout={handleLogout} />
+        ) : (
+          <Dashboard user={user} onLogout={handleLogout} />
+        )}
         
         {/* Modal de autenticación */}
         {showAuthModal && (
